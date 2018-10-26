@@ -1,0 +1,74 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: jenkins-storage
+  labels: 
+    app: jenkins-storage
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: gp2
+  zone: eu-west-2a
+allowVolumeExpansion: true
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: jenkins-data
+  annotations:
+    volume.beta.kubernetes.io/storage-class: "jenkins-storage"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+
+      
+      
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: jenkins
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: jenkins
+    spec:
+      securityContext:
+        runAsUser: 1000
+        fsGroup: 1000
+      nodeSelector:
+        disktype: ssd
+      containers:
+      - name: jenkins
+        image: jenkins:2.60.3
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+          - name: jenkins-home
+            mountPath: /var/jenkins_home
+      volumes:
+        - name: jenkins-home
+          persistentVolumeClaim:
+            claimName: jenkins-data
+      nodeSelector:
+        jenkins: here
+
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: jenkins
+  labels:
+    app: jenkins
+spec:
+  type: NodePort
+  ports:
+    - port: 9500
+      targetPort: 8080
+      name: jenkinsport
+  selector:
+    app: jenkins
+  type: LoadBalancer
